@@ -1,0 +1,256 @@
+﻿<?xml version="1.0" encoding="utf-8" ?>
+<project name="Plato" default="deploy" basedir=".">
+	<property file="build.properties" />
+	<property environment="env" />
+	<property name="deps.dir" value="${basedir}/dependencies"/>
+	
+	<property name="jboss.args" value="--server-config=standalone-full.xml" />
+
+	<property name="adminapp.gwt.module" value="gr.grnet.syggrammata.adminapp.AdminApp" />
+	<property name="adminapp.gwt.module.class" value="AdminApp" />
+
+	<!-- Application server specific configuration -->
+	<property name="jboss-spec.dir" value="${basedir}/jboss" />
+	<property name="jboss-spec.conf.dir" value="${jboss-spec.dir}/conf" />
+	<property name="jboss-spec.configuration.dir" value="${jboss-spec.dir}/configuration" />
+	<property name="jboss-spec.deploy.dir" value="${jboss-spec.dir}/deploy" />
+	<property name="jboss.project" value="${basedir}/../jboss-conf/${jboss.version}" />
+	<property name="lib.dir" value="${basedir}/lib" />
+
+	<!-- Jboss dirs -->
+	<property name="jboss.home" value="${deps.dir}/jboss-as-${jboss.version}" />
+	<property name="jboss.filename" value="jboss-as-${jboss.version}.zip"/>
+	<property name="jboss.download.url" value="http://download.jboss.org/jbossas/${jboss.major.version}/jboss-as-${jboss.version}/jboss-as-${jboss.version}.zip"/>
+
+	<property name="gwt.path" value="${env.GWT_PATH}" />
+	<property name="smartgwt.path" value="${env.SMARTGWT_PATH}" />
+
+	<property name="jboss.bin.dir" value="${jboss.home}/bin" />
+	<property name="jboss.conf.dir" value="${jboss.home}/bin" />
+	<property name="jboss.configuration.dir" value="${jboss.home}/standalone/configuration" />
+	<property name="jboss.deploy.dir" value="${jboss.home}/standalone/deployments" />
+	<property name="jboss.modules.dir" value="${jboss.home}/modules" />
+
+	<!-- Source dirs -->
+	<property name="src.dir" value="${basedir}/src" />
+
+	<!-- MBeans -->
+	<property name="mbeans.dir" value="${basedir}/mbeans"/>
+	<property name="mbeans.meta-inf.dir" value="${mbeans.dir}/META-INF"/>
+
+	<!-- Build dirs -->
+	<property name="build.dir" value="${basedir}/bin" />
+	<property name="adminapp.gwt.www.dir" value="${build.dir}/adminapp/www" />
+	<property name="adminapp.dist.war" value="${adminapp.gwt.module.class}.war" />
+	<property name="dist.ear" value="${ant.project.name}.ear" />
+
+	<property name="adminapp.war.dir" value="${basedir}/adminappwar" />
+	<property name="adminapp.war.lib.dir" value="${adminapp.war.dir}/WEB-INF/lib" />
+	<property name="ear.dir" value="${basedir}/ear" />
+	<property name="ear.lib.dir" value="${ear.dir}/lib" />
+
+	<property name="rest.dist.war" value="rest.war" />
+	<property name="rest.war.dir" value="${basedir}/restWar" />
+	<property name="rest.war.lib.dir" value="${rest.war.dir}/WEB-INF/lib" />
+
+	<property name="mbeans.dist.file" value="${ant.project.name}-mbeans.sar"/>
+
+	<!-- set classpath -->
+	<path id="project.class.path">
+		<pathelement path="${build.dir}" />
+
+		<fileset dir="${lib.dir}" includes="*.jar" />
+		<pathelement location="${gwt.path}/gwt-user.jar" />
+		<pathelement location="${smartgwt.path}/smartgwt.jar" />
+
+		<!-- Include everything and get it over with! -->
+		<fileset dir="${jboss.modules.dir}" includes="**/*.jar" />
+
+		<pathelement location="${jboss-spec.deploy.dir}/postgresql-8.4-701.jdbc4.jar" />
+	</path>
+	
+	<target name="check-dependencies" description="Checks if all dependencies are present">
+        <condition property="dependencies.present">
+            <and>
+                <available file="${jboss.home}" type="dir"/>
+            </and>
+        </condition>
+        <echo message="dependencies.present=${dependencies.present}"/>
+    </target>
+
+    <target name="fetch-dependencies" unless="dependencies.present" description="Fetch the dpendencies if not present" depends="check-dependencies">
+    	<mkdir dir="${deps.dir}"/>
+        <get src="${jboss.download.url}" dest="${deps.dir}/${jboss.filename}" usetimestamp="true"/>
+        <unzip src="${deps.dir}/${jboss.filename}" dest="${jboss.home}/.."/>
+    </target>
+
+	<target name="install" depends="fetch-dependencies" description="Installs the configuration files of the application server">
+		<!--Install the app configuration-->
+		<copy todir="${jboss.conf.dir}" overwrite="true" failonerror="false">
+			<fileset dir="${jboss.project}/conf"/>
+		</copy>
+		<copy todir="${jboss.conf.dir}" overwrite="true" failonerror="false">
+			<fileset dir="${jboss-spec.conf.dir}" />
+		</copy>
+		<copy todir="${jboss.configuration.dir}" overwrite="true" failonerror="false">
+			<fileset dir="${jboss-spec.configuration.dir}" />
+		</copy>
+		<copy todir="${jboss.deploy.dir}" overwrite="true" failonerror="false">
+			<fileset dir="${jboss.project}/deploy"/>
+		</copy>
+		<copy todir="${jboss.deploy.dir}" overwrite="true" failonerror="false">
+			<fileset dir="${jboss-spec.deploy.dir}" />
+		</copy>
+	</target>
+
+	<target name="compile" description="Compile src to bin">
+		<mkdir dir="${build.dir}" />
+		<javac srcdir="${src.dir}" destdir="${build.dir}" debug="on" debuglevel="lines,vars,source" source="1.6" encoding="UTF-8">
+			<classpath refid="project.class.path" />
+		</javac>
+	</target>
+
+	<target name="package-ejb" description="Package up the EJB classes">
+		<jar destfile="${build.dir}/ejbs.jar">
+			<metainf dir="${src.dir}/META-INF" />
+			<zipfileset dir="${build.dir}">
+				<include name="**/service/**" />
+			</zipfileset>
+			<zipfileset dir="${src.dir}">
+							<include name="import.sql" />
+						</zipfileset>
+		</jar>
+	</target>
+
+	<target name="package-warAdminApp-code" depends="compile" description="Package up the war code as a jar">
+		<jar destfile="${build.dir}/${adminapp.gwt.module.class}.jar">
+			<fileset dir="${build.dir}">
+				<include name="**/adminapp/client/${adminapp.gwt.module.class}Service.class" />
+				<include name="**/adminapp/server/**" />
+				<include name="**/common/**" />
+			</fileset>
+		</jar>
+	</target>
+
+	<condition property="gwt.workers" value="2">
+		<not>
+			<isset property="gwt.workers" />
+		</not>
+	</condition>
+
+	<target name="check-adminapp-gwt-compile" depends="compile">
+		<uptodate property="adminapp-compilation-not-needed">
+			<srcfiles dir="${src.dir}">
+				<include name="**/Common.gwt.xml"/>
+				<include name="**/common/**"/>
+				<include name="**/adminapp/client/**"/>
+				<include name="**/adminapp/public/**"/>
+				<include name="**/AdminApp.gwt.xml"/>
+			</srcfiles>
+			<mapper type="merge" to="${adminapp.gwt.www.dir}/${adminapp.gwt.module}/${adminapp.gwt.module}.nocache.js"/>
+		</uptodate>
+	</target>
+
+	<target name="adminapp-gwt-compile" depends="check-adminapp-gwt-compile" unless="adminapp-compilation-not-needed" description="Compile client code to JavaScript">
+		<echo message="draftCompile=${draftCompile}" />
+		<java classname="com.google.gwt.dev.Compiler" failonerror="true" fork="true">
+			<arg value="-war" />
+			<arg value="${adminapp.gwt.www.dir}" />
+			<arg value="-localWorkers" />
+			<arg value="${gwt.workers}" />
+			<arg value="${draftCompile}" />
+			<arg value="${adminapp.gwt.module}" />
+			<jvmarg value="-Xmx256m" />
+			<classpath>
+				<pathelement path="${gwt.path}/gwt-dev.jar" />
+				<pathelement path="${gwt.path}/gwt-user.jar" />
+				<pathelement path="${gwt.path}/validation-api-1.0.0.GA.jar" />
+				<pathelement path="${gwt.path}/validation-api-1.0.0.GA-sources.jar" />
+				<pathelement path="${src.dir}" />
+			</classpath>
+		</java>
+	</target>
+
+	<!-- target name="package-warAdminApp" depends="adminapp-gwt-compile, package-warAdminApp-code" description="Package up the admin web part as a war">
+		<jar destfile="${build.dir}/${adminapp.dist.war}">
+			<zipfileset dir="${adminapp.war.dir}" />
+			<zipfileset dir="${adminapp.gwt.www.dir}/${adminapp.gwt.module}" />
+			<zipfileset dir="${build.dir}" prefix="WEB-INF/lib">
+				<include name="${adminapp.gwt.module.class}.jar" />
+			</zipfileset>
+			<zipfileset dir="${gwt.path}" prefix="WEB-INF/lib">
+				<include name="gwt-servlet.jar" />
+			</zipfileset>
+		</jar>
+	</target -->
+
+	<target name="package-warRest" depends="compile" description="Package up the REST web part as a war">
+		<jar destfile="${build.dir}/${rest.dist.war}">
+			<zipfileset dir="${rest.war.dir}" />
+			<zipfileset dir="${build.dir}" prefix="WEB-INF/classes">
+				<include name="**/server/**" />
+			</zipfileset>
+		</jar>
+	</target>
+
+
+	<target name="package-ear" depends="package-warRest, package-ejb" description="Package up the project as an ear">
+		<jar destfile="${build.dir}/${dist.ear}" manifest="${ear.dir}/META-INF/MANIFEST.MF">
+			<metainf dir="${ear.dir}/META-INF" />
+			<zipfileset dir="${ear.dir}">
+				<exclude name="META-INF/**" />
+				<exclude name="META-INF-nogwt/**" />
+			</zipfileset>
+			<zipfileset dir="${build.dir}">
+				<include name="ejbs.jar" />
+				<include name="${adminapp.dist.war}" />
+				<include name="${rest.dist.war}" />
+				<include name="${mbeans.dist.file}"/>
+			</zipfileset>
+		</jar>
+	</target>
+
+
+	<target name="deploy" description="Deploy the project to the server">
+		<!-- This property is passed as an argument to the gwt compiler. If the release target is called, it is unset -->
+		<property name="draftCompile" value="-draftCompile" />
+		<antcall target="package-ear" />
+		<copy todir="${jboss.deploy.dir}/../" file="${build.dir}/${dist.ear}" />
+		<move todir="${jboss.deploy.dir}" file="${jboss.deploy.dir}/../${dist.ear}" />
+	</target>
+
+	<target name="redeploy" depends="package-ear" description="Redeploy the project to the server">
+		<copy todir="${jboss.deploy.dir}" file="${build.dir}/${dist.ear}" overwrite="yes" />
+	</target>
+
+	<target name="undeploy" description="Undeploy the project from the server">
+		<delete file="${jboss.deploy.dir}/${dist.ear}" />
+	</target>
+
+	<target name="release">
+		<antcall target="clean" />
+		<property name="draftCompile" value="" />
+		<antcall target="deploy" />
+	</target>
+
+	<target name="clean" description="Delete the contents of the bin and www directories">
+		<delete dir="${build.dir}" />
+		<delete dir="${rest.build.dir}" />
+	</target>
+	
+    <target name="distclean" depends="clean" description="Delete all downloaded dependencies">
+        <delete dir="${deps.dir}"/>
+    </target>
+	
+	<target name="run" description="Starts the server" depends="deploy">
+        <exec executable="${jboss.bin.dir}/run.sh" osfamily="unix">
+            <arg line="${jboss.args}"/>
+        </exec>
+		<exec executable="cmd" osfamily="windows">
+		    <arg value="/c"/>
+		    <arg value="${jboss.bin.dir}/standalone.bat"/>
+            <arg line="${jboss.args}"/>
+		</exec>
+    </target>
+
+</project>

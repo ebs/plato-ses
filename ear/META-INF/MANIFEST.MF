@@ -1,0 +1,1 @@
+Dependencies: org.apache.log4j export, org.apache.commons.logging export
